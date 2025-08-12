@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { useTasksStore } from '../store/useTasksStore';
+import { useTasksStore, selectTodoTasks } from '../store/useTasksStore';
 
 export default function TodayScreen() {
   const brief = useTasksStore(s => s.brief);
-  const tasks = useTasksStore(s => s.tasks);
+  const todoTasks = useTasksStore(selectTodoTasks);
   const isLoading = useTasksStore(s => s.isLoading);
   const hydrate = useTasksStore(s => s.hydrate);
   const markDone = useTasksStore(s => s.markDone);
@@ -18,11 +18,6 @@ export default function TodayScreen() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
-
-  const todoTasks = useMemo(
-    () => tasks.filter(t => t.status === 'todo'),
-    [tasks]
-  );
 
   const handleDone = async (id: string) => {
     setProcessingId(id);

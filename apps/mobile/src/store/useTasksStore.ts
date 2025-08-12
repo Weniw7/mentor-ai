@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getQuoteForDate } from '../services/motivation';
 
 export type Task = {
   id: string;
@@ -8,9 +9,9 @@ export type Task = {
   status: 'todo' | 'done' | 'skipped';
 };
 
-type LastAction = { type: 'done' | 'skip'; task: Task };
+export type LastAction = { type: 'done' | 'skip'; task: Task };
 
-type TasksStore = {
+export type TasksStore = {
   brief: string;
   motivationalQuote: string;
   tasks: Task[];
@@ -24,7 +25,10 @@ type TasksStore = {
   removeTask: (id: string) => Promise<void>;
   replan: () => Promise<void>;
   recalcBrief: () => void;
+  setMotivationalQuote: (dateKey: string) => Promise<void>;
 };
+
+export const selectTodoTasks = (state: TasksStore) => state.tasks.filter(t => t.status === 'todo');
 
 const STORAGE_KEY = 'mentorai:store';
 
@@ -34,43 +38,8 @@ function computeBrief(tasks: Task[]): string {
   return `Tienes ${todo.length} tareas (~${totalMin} min)`;
 }
 
-const QUOTES: string[] = [
-  'Hoy es un buen día para empezar.',
-  'Pequeños pasos crean grandes cambios.',
-  'Tu enfoque es tu superpoder.',
-  'Sigue, aunque sea lento, pero sigue.',
-  'La disciplina vence a la motivación.',
-  'Hecho es mejor que perfecto.',
-  'Cada minuto cuenta, haz que valga.',
-  'Empieza por lo pequeño, gana impulso.',
-  'Tú controlas tu siguiente acción.',
-  'Una cosa a la vez, bien hecha.',
-  'Con constancia, todo llega.',
-  'Respira, prioriza y avanza.',
-  'Un poco hoy, mucho mañana.',
-  'Tu futuro yo te lo agradecerá.',
-  'La claridad llega al actuar.',
-];
-
 function getTodayKey(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function dayOfYearFromKey(key: string): number {
-  const [y, m, d] = key.split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  const jan1 = new Date(Date.UTC(y, 0, 1));
-  return Math.floor((date.getTime() - jan1.getTime()) / 86400000);
-}
-
-function pickQuoteForDay(key: string): string {
-  const idx = (dayOfYearFromKey(key) + key.split('-').reduce((a, p) => a + Number(p), 0)) % QUOTES.length;
-  return QUOTES[idx];
-}
-
-function pickRandomQuoteDifferent(previous?: string): string {
-  const pool = QUOTES.filter(q => q !== previous);
-  return pool[Math.floor(Math.random() * pool.length)] || QUOTES[0];
 }
 
 export const useTasksStore = create<TasksStore>((set, get) => ({
@@ -94,8 +63,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
         const todayKey = getTodayKey();
         const storedKey: string | undefined = typeof data?.dateKey === 'string' ? data.dateKey : undefined;
         const storedQuote: string | undefined = typeof data?.motivationalQuote === 'string' ? data.motivationalQuote : undefined;
-        const motivationalQuote =
-          storedKey === todayKey && storedQuote ? storedQuote : pickQuoteForDay(todayKey);
+        const motivationalQuote = storedKey === todayKey && storedQuote ? storedQuote : getQuoteForDate(todayKey);
         set({ tasks, brief, motivationalQuote, isLoading: false, lastAction: undefined });
         try {
           await AsyncStorage.setItem(
@@ -105,7 +73,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
         } catch {}
       } else {
         const todayKey = getTodayKey();
-        const motivationalQuote = pickQuoteForDay(todayKey);
+        const motivationalQuote = getQuoteForDate(todayKey);
         set({ motivationalQuote, isLoading: false });
         try {
           const { tasks, brief } = get();
@@ -122,6 +90,18 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
 
   recalcBrief: () => {
     set(state => ({ brief: computeBrief(state.tasks) }));
+  },
+
+  setMotivationalQuote: async (dateKey: string) => {
+    const motivationalQuote = getQuoteForDate(dateKey);
+    set({ motivationalQuote });
+    try {
+      const { tasks, brief } = get();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, brief, motivationalQuote, dateKey })
+      );
+    } catch {}
   },
 
   addTask: async (t) => {
@@ -198,8 +178,8 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
       { id: `t-${now}-3`, title: 'Chequeo de correos prioritarios', duration: 15, status: 'todo' },
       { id: `t-${now}-4`, title: 'Bloque de movimiento/descanso', duration: 10, status: 'todo' },
     ];
-    const nextQuote = pickRandomQuoteDifferent(get().motivationalQuote);
-    set({ tasks: mock, lastAction: undefined, motivationalQuote: nextQuote });
+    set({ tasks: mock, lastAction: undefined });
+    await get().setMotivationalQuote(getTodayKey());
     get().recalcBrief();
     try {
       const { tasks, brief, motivationalQuote } = get();
