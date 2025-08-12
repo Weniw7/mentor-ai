@@ -1,99 +1,99 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-
-interface TaskItem {
-  id: string;
-  title: string;
-  durationMin: number;
-}
-
-type ScreenState = 'loading' | 'ready' | 'empty' | 'error';
-
-const MOCK_TASKS: TaskItem[] = [
-  { id: '1', title: 'Revisar agenda del día', durationMin: 5 },
-  { id: '2', title: 'Plan de enfoque (Deep work)', durationMin: 45 },
-  { id: '3', title: 'Chequeo de correos prioritarios', durationMin: 15 },
-  { id: '4', title: 'Bloque de movimiento/descanso', durationMin: 10 },
-];
+import { useTasksStore, selectTodoTasks } from '../store/useTasksStore';
 
 export default function TodayScreen() {
-  const [screenState, setScreenState] = useState<ScreenState>('loading');
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const brief = useTasksStore(s => s.brief);
+  const todoTasks = useTasksStore(selectTodoTasks);
+  const isLoading = useTasksStore(s => s.isLoading);
+  const hydrate = useTasksStore(s => s.hydrate);
+  const markDone = useTasksStore(s => s.markDone);
+  const skip = useTasksStore(s => s.skip);
+  const replan = useTasksStore(s => s.replan);
+  const motivationalQuote = useTasksStore(s => s.motivationalQuote);
+
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Simular distintos estados. Cambiar el valor para probar.
-      const simulate: ScreenState = 'ready'; // 'loading' | 'ready' | 'empty' | 'error'
-      if (simulate === 'ready') {
-        setTasks(MOCK_TASKS.slice(0, 4));
-        setScreenState('ready');
-      } else if (simulate === 'empty') {
-        setTasks([]);
-        setScreenState('empty');
-      } else if (simulate === 'error') {
-        setScreenState('error');
-      } else {
-        setScreenState('loading');
-      }
-    }, 800);
+    hydrate();
+  }, [hydrate]);
 
-    return () => clearTimeout(timer);
-  }, []);
+  const handleDone = async (id: string) => {
+    setProcessingId(id);
+    await markDone(id);
+    setTimeout(() => setProcessingId(null), 250);
+  };
+
+  const handleSkip = async (id: string) => {
+    setProcessingId(id);
+    await skip(id);
+    setTimeout(() => setProcessingId(null), 250);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await replan();
+    await hydrate();
+    setRefreshing(false);
+  };
 
   const content = useMemo(() => {
-    switch (screenState) {
-      case 'loading':
-        return (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" />
-            <Text style={styles.helperText}>Cargando el brief del día...</Text>
+    if (isLoading) {
+      return (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.helperText}>Cargando el brief del día...</Text>
+        </View>
+      );
+    }
+    return (
+      <FlatList
+        data={todoTasks}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={
+          <View>
+            {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
+            <Text style={styles.title}>{brief || 'Brief del día'}</Text>
           </View>
-        );
-      case 'error':
-        return (
-          <View style={styles.centered}>
-            <Text style={styles.errorTitle}>No pudimos cargar tus tareas</Text>
-            <Text style={styles.helperText}>Intenta nuevamente más tarde.</Text>
-          </View>
-        );
-      case 'empty':
-        return (
+        }
+        contentContainerStyle={styles.listContainer}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        ListEmptyComponent={
           <View style={styles.centered}>
             <Text style={styles.helperText}>No hay tareas para hoy.</Text>
           </View>
-        );
-      case 'ready':
-      default:
-        return (
-          <FlatList
-            data={tasks}
-            keyExtractor={(item) => item.id}
-            ListHeaderComponent={<Text style={styles.title}>Brief del día</Text>}
-            contentContainerStyle={styles.listContainer}
-            renderItem={({ item }) => (
-              <View style={styles.card}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardSubtitle}>{item.durationMin} min</Text>
-                </View>
-                <View style={styles.cardActions}>
-                  <Pressable style={[styles.btn, styles.btnDone]} onPress={() => {}}>
-                    <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
-                  </Pressable>
-                  <Pressable style={[styles.btn, styles.btnSkip]} onPress={() => {}}>
-                    <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-          />
-        );
-    }
-  }, [screenState, tasks]);
+        }
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>{item.title}</Text>
+              <Text style={styles.cardSubtitle}>{item.duration} min</Text>
+            </View>
+            <View style={styles.cardActions}>
+              <Pressable
+                style={[styles.btn, styles.btnDone]}
+                onPress={() => handleDone(item.id)}
+                disabled={processingId === item.id || isLoading}
+              >
+                <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.btn, styles.btnSkip]}
+                onPress={() => handleSkip(item.id)}
+                disabled={processingId === item.id || isLoading}
+              >
+                <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+      />
+    );
+  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote]);
 
-  return (
-    <SafeAreaView style={styles.container}>{content}</SafeAreaView>
-  );
+  return <SafeAreaView style={styles.container}>{content}</SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
@@ -126,6 +126,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
     color: '#111',
+  },
+  quote: {
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: '#222',
+    fontStyle: 'italic',
+    marginBottom: 8,
   },
   card: {
     backgroundColor: '#fff',
