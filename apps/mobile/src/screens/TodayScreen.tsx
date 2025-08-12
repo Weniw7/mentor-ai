@@ -53,48 +53,48 @@ export default function TodayScreen() {
       );
     }
     return (
-      <FlatList
-        data={todoTasks}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <View>
-            {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
-            <Text style={styles.title}>{brief || 'Brief del día'}</Text>
-          </View>
-        }
-        contentContainerStyle={styles.listContainer}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        ListEmptyComponent={
-          <View style={styles.centered}>
-            <Text style={styles.helperText}>No hay tareas para hoy.</Text>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardSubtitle}>{item.duration} min</Text>
+      <View style={{ flex: 1 }}>
+        <View style={styles.header}>
+          {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
+          <Text style={styles.title}>{brief || 'Brief del día'}</Text>
+        </View>
+        <FlatList
+          data={todoTasks}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.helperText}>No hay tareas para hoy.</Text>
             </View>
-            <View style={styles.cardActions}>
-              <Pressable
-                style={[styles.btn, styles.btnDone]}
-                onPress={() => handleDone(item.id)}
-                disabled={processingId === item.id || isLoading}
-              >
-                <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.btn, styles.btnSkip]}
-                onPress={() => handleSkip(item.id)}
-                disabled={processingId === item.id || isLoading}
-              >
-                <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
-              </Pressable>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardSubtitle}>{item.duration} min</Text>
+              </View>
+              <View style={styles.cardActions}>
+                <Pressable
+                  style={[styles.btn, styles.btnDone]}
+                  onPress={() => handleDone(item.id)}
+                  disabled={processingId === item.id || isLoading}
+                >
+                  <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.btn, styles.btnSkip]}
+                  onPress={() => handleSkip(item.id)}
+                  disabled={processingId === item.id || isLoading}
+                >
+                  <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      </View>
     );
   }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote]);
 
@@ -126,6 +126,10 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
   },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
@@ -139,6 +143,11 @@ const styles = StyleSheet.create({
     color: '#222',
     fontStyle: 'italic',
     marginBottom: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
   },
   card: {
     backgroundColor: '#fff',
