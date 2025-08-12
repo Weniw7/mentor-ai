@@ -12,6 +12,7 @@ type LastAction = { type: 'done' | 'skip'; task: Task };
 
 type TasksStore = {
   brief: string;
+  motivationalQuote: string;
   tasks: Task[];
   isLoading: boolean;
   lastAction?: LastAction;
@@ -33,8 +34,48 @@ function computeBrief(tasks: Task[]): string {
   return `Tienes ${todo.length} tareas (~${totalMin} min)`;
 }
 
+const QUOTES: string[] = [
+  'Hoy es un buen día para empezar.',
+  'Pequeños pasos crean grandes cambios.',
+  'Tu enfoque es tu superpoder.',
+  'Sigue, aunque sea lento, pero sigue.',
+  'La disciplina vence a la motivación.',
+  'Hecho es mejor que perfecto.',
+  'Cada minuto cuenta, haz que valga.',
+  'Empieza por lo pequeño, gana impulso.',
+  'Tú controlas tu siguiente acción.',
+  'Una cosa a la vez, bien hecha.',
+  'Con constancia, todo llega.',
+  'Respira, prioriza y avanza.',
+  'Un poco hoy, mucho mañana.',
+  'Tu futuro yo te lo agradecerá.',
+  'La claridad llega al actuar.',
+];
+
+function getTodayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function dayOfYearFromKey(key: string): number {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const jan1 = new Date(Date.UTC(y, 0, 1));
+  return Math.floor((date.getTime() - jan1.getTime()) / 86400000);
+}
+
+function pickQuoteForDay(key: string): string {
+  const idx = (dayOfYearFromKey(key) + key.split('-').reduce((a, p) => a + Number(p), 0)) % QUOTES.length;
+  return QUOTES[idx];
+}
+
+function pickRandomQuoteDifferent(previous?: string): string {
+  const pool = QUOTES.filter(q => q !== previous);
+  return pool[Math.floor(Math.random() * pool.length)] || QUOTES[0];
+}
+
 export const useTasksStore = create<TasksStore>((set, get) => ({
   brief: '',
+  motivationalQuote: '',
   tasks: [],
   isLoading: false,
   lastAction: undefined,
@@ -50,9 +91,29 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
           typeof data?.brief === 'string' && data.brief.length > 0
             ? data.brief
             : computeBrief(tasks);
-        set({ tasks, brief, isLoading: false, lastAction: undefined });
+        const todayKey = getTodayKey();
+        const storedKey: string | undefined = typeof data?.dateKey === 'string' ? data.dateKey : undefined;
+        const storedQuote: string | undefined = typeof data?.motivationalQuote === 'string' ? data.motivationalQuote : undefined;
+        const motivationalQuote =
+          storedKey === todayKey && storedQuote ? storedQuote : pickQuoteForDay(todayKey);
+        set({ tasks, brief, motivationalQuote, isLoading: false, lastAction: undefined });
+        try {
+          await AsyncStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ tasks, brief, motivationalQuote, dateKey: todayKey })
+          );
+        } catch {}
       } else {
-        set({ isLoading: false });
+        const todayKey = getTodayKey();
+        const motivationalQuote = pickQuoteForDay(todayKey);
+        set({ motivationalQuote, isLoading: false });
+        try {
+          const { tasks, brief } = get();
+          await AsyncStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({ tasks, brief, motivationalQuote, dateKey: todayKey })
+          );
+        } catch {}
       }
     } catch {
       set({ isLoading: false });
@@ -69,8 +130,11 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     }));
     get().recalcBrief();
     try {
-      const { tasks, brief } = get();
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, brief }));
+      const { tasks, brief, motivationalQuote } = get();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+      );
     } catch {}
   },
 
@@ -85,8 +149,11 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     }));
     get().recalcBrief();
     try {
-      const { tasks, brief } = get();
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, brief }));
+      const { tasks, brief, motivationalQuote } = get();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+      );
     } catch {}
   },
 
@@ -101,8 +168,11 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     }));
     get().recalcBrief();
     try {
-      const { tasks, brief } = get();
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, brief }));
+      const { tasks, brief, motivationalQuote } = get();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+      );
     } catch {}
   },
 
@@ -112,8 +182,11 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     }));
     get().recalcBrief();
     try {
-      const { tasks, brief } = get();
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, brief }));
+      const { tasks, brief, motivationalQuote } = get();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+      );
     } catch {}
   },
 
@@ -125,11 +198,15 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
       { id: `t-${now}-3`, title: 'Chequeo de correos prioritarios', duration: 15, status: 'todo' },
       { id: `t-${now}-4`, title: 'Bloque de movimiento/descanso', duration: 10, status: 'todo' },
     ];
-    set({ tasks: mock, lastAction: undefined });
+    const nextQuote = pickRandomQuoteDifferent(get().motivationalQuote);
+    set({ tasks: mock, lastAction: undefined, motivationalQuote: nextQuote });
     get().recalcBrief();
     try {
-      const { tasks, brief } = get();
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, brief }));
+      const { tasks, brief, motivationalQuote } = get();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+      );
     } catch {}
   },
 }));
