@@ -10,6 +10,7 @@ export default function TodayScreen() {
   const markDone = useTasksStore(s => s.markDone);
   const skip = useTasksStore(s => s.skip);
   const replan = useTasksStore(s => s.replan);
+  const motivationalQuote = useTasksStore(s => s.motivationalQuote);
 
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,7 +56,12 @@ export default function TodayScreen() {
       <FlatList
         data={todoTasks}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={<Text style={styles.title}>{brief || 'Brief del día'}</Text>}
+        ListHeaderComponent={
+          <View>
+            {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
+            <Text style={styles.title}>{brief || 'Brief del día'}</Text>
+          </View>
+        }
         contentContainerStyle={styles.listContainer}
         refreshing={refreshing}
         onRefresh={onRefresh}
@@ -90,7 +96,7 @@ export default function TodayScreen() {
         )}
       />
     );
-  }, [isLoading, todoTasks, brief, refreshing, processingId]);
+  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote]);
 
   return <SafeAreaView style={styles.container}>{content}</SafeAreaView>;
 }
@@ -125,6 +131,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
     color: '#111',
+  },
+  quote: {
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: '#222',
+    fontStyle: 'italic',
+    marginBottom: 8,
   },
   card: {
     backgroundColor: '#fff',
