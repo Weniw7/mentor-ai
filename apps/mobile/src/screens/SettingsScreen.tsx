@@ -18,7 +18,11 @@ export default function SettingsScreen() {
           <Text style={styles.label}>Notificaciones</Text>
           <Text style={styles.helper}>Activar recordatorios para el brief</Text>
         </View>
-        <Switch value={notificationsEnabled} onValueChange={() => setNotificationsEnabled((v) => !v)} disabled />
+        <Switch value={notificationsEnabled} onValueChange={() => setNotificationsEnabled((v) => !v)} disabled 
+          trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
+          thumbColor={theme.colors.card}
+          ios_backgroundColor={theme.colors.border}
+        />
       </View>
 
       <View style={styles.row}>

@@ -85,7 +85,7 @@ function getStyles(theme: Theme) {
     },
     input: {
       flex: 1,
-      height: 40,
+      height: theme.spacing.lg + theme.spacing.md,
       paddingHorizontal: theme.spacing.sm,
       color: theme.colors.text,
       fontSize: theme.typography.body,
