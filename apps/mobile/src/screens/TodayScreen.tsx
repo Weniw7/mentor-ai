@@ -11,6 +11,7 @@ export default function TodayScreen() {
   const skip = useTasksStore(s => s.skip);
   const replan = useTasksStore(s => s.replan);
   const motivationalQuote = useTasksStore(s => s.motivationalQuote);
+  const history = useTasksStore(s => s.history);
 
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -23,6 +24,9 @@ export default function TodayScreen() {
     () => tasks.filter(t => t.status === 'todo'),
     [tasks]
   );
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayStats = history?.[todayKey] ?? { completed: 0, skipped: 0, totalTimeDone: 0 };
 
   const handleDone = async (id: string) => {
     setProcessingId(id);
@@ -60,6 +64,9 @@ export default function TodayScreen() {
           <View>
             {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
             <Text style={styles.title}>{brief || 'Brief del día'}</Text>
+            <Text style={styles.todayStats}>
+              Hoy: {todayStats.completed} completadas, {todayStats.skipped} skip, {todayStats.totalTimeDone} min ahorrados
+            </Text>
           </View>
         }
         contentContainerStyle={styles.listContainer}
@@ -96,7 +103,7 @@ export default function TodayScreen() {
         )}
       />
     );
-  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote]);
+  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote, todayStats]);
 
   return <SafeAreaView style={styles.container}>{content}</SafeAreaView>;
 }
@@ -129,7 +136,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: 4,
     color: '#111',
   },
   quote: {
@@ -139,6 +146,11 @@ const styles = StyleSheet.create({
     color: '#222',
     fontStyle: 'italic',
     marginBottom: 8,
+  },
+  todayStats: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 12,
   },
   card: {
     backgroundColor: '#fff',

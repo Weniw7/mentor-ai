@@ -8,6 +8,11 @@ export type Task = {
   status: 'todo' | 'done' | 'skipped';
 };
 
+// Añadimos tipos para historial diario
+type DayKey = string;
+type HistoryEntry = { completed: number; skipped: number; totalTimeDone: number };
+type HistoryRecord = Record<DayKey, HistoryEntry>;
+
 type LastAction = { type: 'done' | 'skip'; task: Task };
 
 type TasksStore = {
@@ -16,6 +21,8 @@ type TasksStore = {
   tasks: Task[];
   isLoading: boolean;
   lastAction?: LastAction;
+  history: HistoryRecord;
+  lastDayKey?: string;
 
   hydrate: () => Promise<void>;
   addTask: (t: Omit<Task, 'status'>) => Promise<void>;
@@ -73,17 +80,38 @@ function pickRandomQuoteDifferent(previous?: string): string {
   return pool[Math.floor(Math.random() * pool.length)] || QUOTES[0];
 }
 
+function emptyHistoryEntry(): HistoryEntry {
+  return { completed: 0, skipped: 0, totalTimeDone: 0 };
+}
+
+function aggregateStatsForTasks(tasks: Task[]): HistoryEntry {
+  const acc = emptyHistoryEntry();
+  for (const t of tasks) {
+    if (t.status === 'done') {
+      acc.completed += 1;
+      acc.totalTimeDone += t.duration || 0;
+    } else if (t.status === 'skipped') {
+      acc.skipped += 1;
+    }
+  }
+  return acc;
+}
+
 export const useTasksStore = create<TasksStore>((set, get) => ({
   brief: '',
   motivationalQuote: '',
   tasks: [],
   isLoading: false,
   lastAction: undefined,
+  history: {},
+  lastDayKey: undefined,
 
   hydrate: async () => {
     set({ isLoading: true });
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      const todayKey = getTodayKey();
+
       if (raw) {
         const data = JSON.parse(raw);
         const tasks: Task[] = Array.isArray(data?.tasks) ? data.tasks : [];
@@ -91,27 +119,55 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
           typeof data?.brief === 'string' && data.brief.length > 0
             ? data.brief
             : computeBrief(tasks);
-        const todayKey = getTodayKey();
-        const storedKey: string | undefined = typeof data?.dateKey === 'string' ? data.dateKey : undefined;
+        const storedKey: string | undefined =
+          typeof data?.lastDayKey === 'string'
+            ? data.lastDayKey
+            : typeof data?.dateKey === 'string'
+              ? data.dateKey
+              : undefined;
         const storedQuote: string | undefined = typeof data?.motivationalQuote === 'string' ? data.motivationalQuote : undefined;
         const motivationalQuote =
           storedKey === todayKey && storedQuote ? storedQuote : pickQuoteForDay(todayKey);
-        set({ tasks, brief, motivationalQuote, isLoading: false, lastAction: undefined });
-        try {
-          await AsyncStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({ tasks, brief, motivationalQuote, dateKey: todayKey })
-          );
-        } catch {}
+        const history: HistoryRecord = data?.history && typeof data.history === 'object' ? (data.history as HistoryRecord) : {};
+
+        if (storedKey && storedKey !== todayKey) {
+          const aggregated = aggregateStatsForTasks(tasks);
+          const prevEntry = history[storedKey] ?? emptyHistoryEntry();
+          const nextHistory: HistoryRecord = {
+            ...history,
+            [storedKey]: {
+              completed: prevEntry.completed + aggregated.completed,
+              skipped: prevEntry.skipped + aggregated.skipped,
+              totalTimeDone: prevEntry.totalTimeDone + aggregated.totalTimeDone,
+            },
+          };
+
+          set({ history: nextHistory, lastDayKey: todayKey, isLoading: false, lastAction: undefined });
+          try {
+            await AsyncStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify({ tasks: [], brief: computeBrief([]), motivationalQuote: pickQuoteForDay(todayKey), history: nextHistory, lastDayKey: todayKey })
+            );
+          } catch {}
+
+          await get().replan();
+        } else {
+          set({ tasks, brief, motivationalQuote, history, lastDayKey: todayKey, isLoading: false, lastAction: undefined });
+          try {
+            await AsyncStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: todayKey })
+            );
+          } catch {}
+        }
       } else {
-        const todayKey = getTodayKey();
         const motivationalQuote = pickQuoteForDay(todayKey);
-        set({ motivationalQuote, isLoading: false });
+        set({ motivationalQuote, history: {}, lastDayKey: todayKey, isLoading: false });
         try {
           const { tasks, brief } = get();
           await AsyncStorage.setItem(
             STORAGE_KEY,
-            JSON.stringify({ tasks, brief, motivationalQuote, dateKey: todayKey })
+            JSON.stringify({ tasks, brief, motivationalQuote, history: {}, lastDayKey: todayKey })
           );
         } catch {}
       }
@@ -130,10 +186,10 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     }));
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote } = get();
+      const { tasks, brief, motivationalQuote, history } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey() })
       );
     } catch {}
   },
@@ -143,16 +199,29 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     if (!current) return;
 
     const updatedTask: Task = { ...current, status: 'done' };
-    set(state => ({
-      tasks: state.tasks.map(t => (t.id === id ? updatedTask : t)),
-      lastAction: { type: 'done', task: updatedTask },
-    }));
+    const addDuration = current.duration || 0;
+    set(state => {
+      const todayKey = getTodayKey();
+      const prev = state.history[todayKey] ?? emptyHistoryEntry();
+      return {
+        tasks: state.tasks.map(t => (t.id === id ? updatedTask : t)),
+        lastAction: { type: 'done', task: updatedTask },
+        history: {
+          ...state.history,
+          [todayKey]: {
+            completed: prev.completed + 1,
+            skipped: prev.skipped,
+            totalTimeDone: prev.totalTimeDone + addDuration,
+          },
+        },
+      };
+    });
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote } = get();
+      const { tasks, brief, motivationalQuote, history } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey() })
       );
     } catch {}
   },
@@ -162,16 +231,28 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     if (!current) return;
 
     const updatedTask: Task = { ...current, status: 'skipped' };
-    set(state => ({
-      tasks: state.tasks.map(t => (t.id === id ? updatedTask : t)),
-      lastAction: { type: 'skip', task: updatedTask },
-    }));
+    set(state => {
+      const todayKey = getTodayKey();
+      const prev = state.history[todayKey] ?? emptyHistoryEntry();
+      return {
+        tasks: state.tasks.map(t => (t.id === id ? updatedTask : t)),
+        lastAction: { type: 'skip', task: updatedTask },
+        history: {
+          ...state.history,
+          [todayKey]: {
+            completed: prev.completed,
+            skipped: prev.skipped + 1,
+            totalTimeDone: prev.totalTimeDone,
+          },
+        },
+      };
+    });
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote } = get();
+      const { tasks, brief, motivationalQuote, history } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey() })
       );
     } catch {}
   },
@@ -182,10 +263,10 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     }));
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote } = get();
+      const { tasks, brief, motivationalQuote, history } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey() })
       );
     } catch {}
   },
@@ -202,10 +283,10 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     set({ tasks: mock, lastAction: undefined, motivationalQuote: nextQuote });
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote } = get();
+      const { tasks, brief, motivationalQuote, history } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, dateKey: getTodayKey() })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey() })
       );
     } catch {}
   },
