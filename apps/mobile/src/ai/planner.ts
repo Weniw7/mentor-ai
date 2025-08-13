@@ -5,6 +5,7 @@ export type ReplanInput = {
   tasks: Task[];
   userPrefs: UserPrefs;
   timeBudget?: number; // minutos
+  focusTag?: string; // optional focus tag to prioritize
 };
 
 export type ReplanOutput = {
@@ -58,7 +59,7 @@ function daysUntil(dateStr?: string): number | undefined {
   return Math.floor(diff / (24 * 60 * 60 * 1000));
 }
 
-function compareByHeuristics(a: Task, b: Task, opts: { timeBudget?: number; currentHour: number; heavyStart: number; heavyEnd: number }): number {
+function compareByHeuristics(a: Task, b: Task, opts: { timeBudget?: number; currentHour: number; heavyStart: number; heavyEnd: number; focusTag?: string }): number {
   const da = daysUntil(a.deadline);
   const db = daysUntil(b.deadline);
 
@@ -70,12 +71,20 @@ function compareByHeuristics(a: Task, b: Task, opts: { timeBudget?: number; curr
   // 2) Priority desc
   if (a.priority !== b.priority) return b.priority - a.priority;
 
-  // 3) Si timeBudget presente, preferir duración corta
+  // 3) Focus tag boost (si coincide, sube)
+  if (opts.focusTag) {
+    const f = opts.focusTag.toLowerCase();
+    const aHas = (a.tags || []).some(t => (t || '').toLowerCase() === f) || (a.title || '').toLowerCase().includes(f);
+    const bHas = (b.tags || []).some(t => (t || '').toLowerCase() === f) || (b.title || '').toLowerCase().includes(f);
+    if (aHas !== bHas) return aHas ? -1 : 1;
+  }
+
+  // 4) Si timeBudget presente, preferir duración corta
   if (opts.timeBudget) {
     if (a.duration !== b.duration) return a.duration - b.duration;
   }
 
-  // 4) Energy matching (pesos suaves)
+  // 5) Energy matching (pesos suaves)
   const inHeavyWindow = opts.currentHour * 60 >= opts.heavyStart && opts.currentHour * 60 < opts.heavyEnd;
   const aHeavyScore = a.energy === 'high' ? (inHeavyWindow ? -1 : 1) : 0;
   const bHeavyScore = b.energy === 'high' ? (inHeavyWindow ? -1 : 1) : 0;
@@ -108,7 +117,7 @@ export function replanHeuristic(input: ReplanInput): ReplanOutput {
   }
 
   const todo = input.tasks.filter(t => t.status === 'todo');
-  const sorted = [...todo].sort((a, b) => compareByHeuristics(a, b, { timeBudget: input.timeBudget, currentHour, heavyStart, heavyEnd }));
+  const sorted = [...todo].sort((a, b) => compareByHeuristics(a, b, { timeBudget: input.timeBudget, currentHour, heavyStart, heavyEnd, focusTag: input.focusTag }));
 
   // Opcional: asignar slots dentro de ventanas y timeBudget si se provee
   const order = sorted.map(t => t.id);
