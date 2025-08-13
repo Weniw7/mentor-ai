@@ -2,88 +2,105 @@ export type ThemeName = 'minimal' | 'gamer' | 'coach';
 
 export interface Theme {
   name: ThemeName;
+  mode: 'light' | 'dark';
   colors: {
-    bg: string;
-    card: string;
-    text: string;
-    subtext: string;
-    accent: string;
+    bg: string;         // color base de fondo
+    card: string;       // tarjetas
+    text: string;       // texto principal
+    subtext: string;    // texto secundario
+    accent: string;     // acento/botones
     success: string;
     warning: string;
     border: string;
     headerBg?: string;
     headerText?: string;
   };
+  fonts: {
+    regular: string | undefined; // puedes mapear a 'System' si no usas custom fonts
+    mono?: string | undefined;
+  };
   radii: { card: number; button: number };
   spacing: { xs: number; sm: number; md: number; lg: number };
   typography: { h1: number; h2: number; body: number };
   effects: { pressScale: number; doneFadeMs: number };
+  bgImage?: any; // require('...') opcional para fondo por tema
 }
+
+const sys = undefined; // usa fuente del sistema por ahora
 
 export const THEME_MINIMAL: Theme = {
   name: 'minimal',
+  mode: 'light',
   colors: {
-    bg: '#F7F9FC',
+    bg: '#F7F8FA',
     card: '#FFFFFF',
-    text: '#0F172A',
-    subtext: '#475569',
-    accent: '#3B82F6',
+    text: '#0E1116',
+    subtext: '#586174',
+    accent: '#2F7CF7',
     success: '#22C55E',
     warning: '#F59E0B',
-    border: '#E2E8F0',
+    border: '#E5E7EB',
     headerBg: '#FFFFFF',
-    headerText: '#0F172A',
+    headerText: '#0E1116',
   },
-  radii: { card: 12, button: 10 },
-  spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
-  typography: { h1: 28, h2: 22, body: 16 },
-  effects: { pressScale: 0.98, doneFadeMs: 200 },
+  fonts: { regular: sys },
+  radii: { card: 16, button: 12 },
+  spacing: { xs: 6, sm: 10, md: 16, lg: 24 },
+  typography: { h1: 24, h2: 18, body: 15 },
+  effects: { pressScale: 0.98, doneFadeMs: 160 },
+  // bgImage: require('../../assets/themes/minimal.jpg'),
 };
 
 export const THEME_GAMER: Theme = {
   name: 'gamer',
+  mode: 'dark',
   colors: {
-    bg: '#0B0F1A',
-    card: '#111827',
-    text: '#E5E7EB',
-    subtext: '#9CA3AF',
-    accent: '#8B5CF6',
-    success: '#22C55E',
+    bg: '#0B1020',
+    card: '#121a33',
+    text: '#E6ECFF',
+    subtext: '#9AA6FF',
+    accent: '#7C3AED',
+    success: '#10B981',
     warning: '#F59E0B',
-    border: '#27272A',
-    headerBg: '#0B0F1A',
-    headerText: '#E5E7EB',
+    border: '#233059',
+    headerBg: '#0F1530',
+    headerText: '#E6ECFF',
   },
-  radii: { card: 14, button: 12 },
-  spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
-  typography: { h1: 30, h2: 24, body: 16 },
-  effects: { pressScale: 0.96, doneFadeMs: 180 },
+  fonts: { regular: sys, mono: sys },
+  radii: { card: 18, button: 14 },
+  spacing: { xs: 6, sm: 10, md: 16, lg: 24 },
+  typography: { h1: 24, h2: 18, body: 15 },
+  effects: { pressScale: 0.97, doneFadeMs: 140 },
+  // bgImage: require('../../assets/themes/gamer.jpg'),
 };
 
 export const THEME_COACH: Theme = {
   name: 'coach',
+  mode: 'light',
   colors: {
-    bg: '#FAFAFA',
+    bg: '#FDFBF7',
     card: '#FFFFFF',
-    text: '#111827',
-    subtext: '#6B7280',
+    text: '#1C1C1C',
+    subtext: '#5F6368',
     accent: '#2563EB',
     success: '#16A34A',
-    warning: '#EAB308',
-    border: '#E5E7EB',
+    warning: '#EA580C',
+    border: '#EDE9D5',
     headerBg: '#FFFFFF',
-    headerText: '#111827',
+    headerText: '#1C1C1C',
   },
-  radii: { card: 12, button: 10 },
-  spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
-  typography: { h1: 28, h2: 22, body: 16 },
-  effects: { pressScale: 0.98, doneFadeMs: 220 },
+  fonts: { regular: sys },
+  radii: { card: 20, button: 14 },
+  spacing: { xs: 6, sm: 10, md: 16, lg: 24 },
+  typography: { h1: 24, h2: 18, body: 15 },
+  effects: { pressScale: 0.98, doneFadeMs: 180 },
+  // bgImage: require('../../assets/themes/coach.jpg'),
 };
 
-export const THEMES: Record<ThemeName, Theme> = {
+export const THEMES = {
   minimal: THEME_MINIMAL,
   gamer: THEME_GAMER,
   coach: THEME_COACH,
-};
+} as const;
 
-export const DEFAULT_THEME: Theme = THEME_MINIMAL;
+export const DEFAULT_THEME = THEME_MINIMAL;

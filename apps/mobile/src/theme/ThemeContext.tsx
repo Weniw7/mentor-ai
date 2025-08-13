@@ -1,54 +1,52 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DEFAULT_THEME, THEMES, Theme, ThemeName } from './tokens';
 
-type ThemeContextValue = {
+type Ctx = {
   theme: Theme;
   themeName: ThemeName;
   setTheme: (name: ThemeName) => void;
   available: ThemeName[];
 };
 
-const THEME_STORAGE_KEY = 'mentorai:theme';
+const ThemeCtx = createContext<Ctx>({
+  theme: DEFAULT_THEME,
+  themeName: 'minimal',
+  setTheme: () => {},
+  available: ['minimal', 'gamer', 'coach'],
+});
 
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-
-export const ThemeProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
-  const [themeName, setThemeName] = useState<ThemeName>(DEFAULT_THEME.name);
-
-  const available = useMemo(() => Object.keys(THEMES) as ThemeName[], []);
-  const theme = useMemo(() => THEMES[themeName], [themeName]);
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [themeName, setThemeName] = useState<ThemeName>('minimal');
 
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-        if (stored && (stored === 'minimal' || stored === 'gamer' || stored === 'coach')) {
-          setThemeName(stored as ThemeName);
+        const saved = await AsyncStorage.getItem('mentorai:theme');
+        if (saved && (saved === 'minimal' || saved === 'gamer' || saved === 'coach')) {
+          setThemeName(saved as ThemeName);
         }
-      } catch {
-        // ignore read errors
-      }
+      } catch {}
     })();
   }, []);
 
-  const setTheme = useCallback((name: ThemeName) => {
+  const setTheme = async (name: ThemeName) => {
     setThemeName(name);
-    AsyncStorage.setItem(THEME_STORAGE_KEY, name).catch(() => {});
-  }, []);
+    try {
+      await AsyncStorage.setItem('mentorai:theme', name);
+    } catch {}
+  };
 
-  const value = useMemo<ThemeContextValue>(
-    () => ({ theme, themeName, setTheme, available }),
-    [theme, themeName, setTheme, available]
-  );
+  const value: Ctx = {
+    theme: THEMES[themeName],
+    themeName,
+    setTheme,
+    available: ['minimal', 'gamer', 'coach'],
+  };
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-};
+  return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
+}
 
-export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return ctx;
+export function useTheme() {
+  return useContext(ThemeCtx);
 }

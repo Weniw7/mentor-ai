@@ -1,17 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, SafeAreaView, StyleSheet, View } from 'react-native';
 import { useTasksStore, selectTodoTasks } from '../store/useTasksStore';
+import { useTheme } from '../theme/ThemeContext';
+import { ThemedScreen, ThemedCard, ThemedH1, ThemedText, ThemedSubText } from '../theme/Themed';
 
 export default function TodayScreen() {
-  const brief = useTasksStore(s => s.brief);
+  // store
+  const brief = useTasksStore((s) => s.brief);
   const todoTasks = useTasksStore(selectTodoTasks);
-  const isLoading = useTasksStore(s => s.isLoading);
-  const hydrate = useTasksStore(s => s.hydrate);
-  const markDone = useTasksStore(s => s.markDone);
-  const skip = useTasksStore(s => s.skip);
-  const replan = useTasksStore(s => s.replan);
-  const motivationalQuote = useTasksStore(s => s.motivationalQuote);
-  const history = useTasksStore(s => s.history);
+  const isLoading = useTasksStore((s) => s.isLoading);
+  const hydrate = useTasksStore((s) => s.hydrate);
+  const markDone = useTasksStore((s) => s.markDone);
+  const skip = useTasksStore((s) => s.skip);
+  const replan = useTasksStore((s) => s.replan);
+  const motivationalQuote = useTasksStore((s) => s.motivationalQuote);
+  const history = useTasksStore((s) => s.history);
+
+  // theme
+  const { theme } = useTheme();
+  const s = useMemo(() => getStyles(theme), [theme]);
 
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,13 +33,13 @@ export default function TodayScreen() {
   const handleDone = async (id: string) => {
     setProcessingId(id);
     await markDone(id);
-    setTimeout(() => setProcessingId(null), 250);
+    setTimeout(() => setProcessingId(null), theme.effects.doneFadeMs);
   };
 
   const handleSkip = async (id: string) => {
     setProcessingId(id);
     await skip(id);
-    setTimeout(() => setProcessingId(null), 250);
+    setTimeout(() => setProcessingId(null), theme.effects.doneFadeMs);
   };
 
   const onRefresh = async () => {
@@ -42,161 +49,157 @@ export default function TodayScreen() {
     setRefreshing(false);
   };
 
+  const header = (
+    <View>
+      {motivationalQuote ? <ThemedH1 style={s.quote}>{motivationalQuote}</ThemedH1> : null}
+      <ThemedH1 style={s.title}>{brief || 'Brief del día'}</ThemedH1>
+      <ThemedSubText style={s.todayStats}>
+        Hoy: {todayStats.completed} completadas, {todayStats.skipped} skip, {todayStats.totalTimeDone} min ahorrados
+      </ThemedSubText>
+    </View>
+  );
+
   const content = useMemo(() => {
     if (isLoading) {
       return (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" />
-          <Text style={styles.helperText}>Cargando el brief del día...</Text>
+        <View style={s.centered}>
+          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <ThemedSubText style={s.helperText}>Cargando el brief del día...</ThemedSubText>
         </View>
       );
     }
+
     return (
       <FlatList
         data={todoTasks}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <View>
-            {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
-            <Text style={styles.title}>{brief || 'Brief del día'}</Text>
-            <Text style={styles.todayStats}>
-              Hoy: {todayStats.completed} completadas, {todayStats.skipped} skip, {todayStats.totalTimeDone} min ahorrados
-            </Text>
-          </View>
-        }
-        contentContainerStyle={styles.listContainer}
+        ListHeaderComponent={header}
+        contentContainerStyle={s.listContainer}
         refreshing={refreshing}
         onRefresh={onRefresh}
         ListEmptyComponent={
-          <View style={styles.centered}>
-            <Text style={styles.helperText}>No hay tareas para hoy.</Text>
+          <View style={s.centered}>
+            <ThemedSubText style={s.helperText}>No hay tareas para hoy.</ThemedSubText>
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.card}>
+          <ThemedCard style={s.card}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardSubtitle}>{item.duration} min</Text>
+              <ThemedText style={s.cardTitle}>{item.title}</ThemedText>
+              <ThemedSubText style={s.cardSubtitle}>{item.duration} min</ThemedSubText>
             </View>
-            <View style={styles.cardActions}>
+
+            <View style={s.cardActions}>
               <Pressable
-                style={[styles.btn, styles.btnDone]}
+                style={({ pressed }) => [
+                  s.btn,
+                  s.btnDone,
+                  { transform: [{ scale: pressed ? theme.effects.pressScale : 1 }] },
+                ]}
                 onPress={() => handleDone(item.id)}
                 disabled={processingId === item.id || isLoading}
               >
-                <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
+                <ThemedText style={s.btnDoneText}>Done</ThemedText>
               </Pressable>
+
               <Pressable
-                style={[styles.btn, styles.btnSkip]}
+                style={({ pressed }) => [
+                  s.btn,
+                  s.btnSkip,
+                  { transform: [{ scale: pressed ? theme.effects.pressScale : 1 }] },
+                ]}
                 onPress={() => handleSkip(item.id)}
                 disabled={processingId === item.id || isLoading}
               >
-                <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
+                <ThemedText style={s.btnSkipText}>Skip</ThemedText>
               </Pressable>
             </View>
-          </View>
+          </ThemedCard>
         )}
       />
     );
-  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote, todayStats]);
+  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote, todayStats, s, theme]);
 
-  return <SafeAreaView style={styles.container}>{content}</SafeAreaView>;
+  // ThemedScreen ya pinta el fondo del tema (o imagen si la has puesto en tokens)
+  return (
+    <ThemedScreen>
+      <SafeAreaView style={s.safeArea}>{content}</SafeAreaView>
+    </ThemedScreen>
+  );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f7f7f7',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  helperText: {
-    marginTop: 8,
-    color: '#666',
-    textAlign: 'center',
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#c00',
-  },
-  listContainer: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 4,
-    color: '#111',
-  },
-  quote: {
-    fontSize: 22,
-    fontWeight: '700',
-    textAlign: 'center',
-    color: '#222',
-    fontStyle: 'italic',
-    marginBottom: 8,
-  },
-  todayStats: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 12,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  cardActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  btn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  btnText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  btnDone: {
-    backgroundColor: '#e6f6ed',
-    borderColor: '#2ea043',
-  },
-  btnDoneText: {
-    color: '#2ea043',
-  },
-  btnSkip: {
-    backgroundColor: '#fff5f5',
-    borderColor: '#d93025',
-    marginLeft: 8,
-  },
-  btnSkipText: {
-    color: '#d93025',
-  },
-});
+const getStyles = (theme: any) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: theme.spacing.md,
+    },
+    helperText: {
+      marginTop: theme.spacing.xs,
+      textAlign: 'center',
+    },
+    listContainer: {
+      padding: theme.spacing.md,
+      paddingBottom: theme.spacing.lg,
+    },
+    title: {
+      marginBottom: theme.spacing.xs,
+    },
+    quote: {
+      textAlign: 'center',
+      fontStyle: 'italic',
+      marginBottom: theme.spacing.xs,
+    },
+    todayStats: {
+      marginBottom: theme.spacing.md,
+    },
+    card: {
+      marginBottom: theme.spacing.sm,
+      flexDirection: 'row',
+      alignItems: 'center',
+      // la sombra varía menos en RN; mantenemos elevación suave
+      shadowColor: '#000',
+      shadowOpacity: theme.mode === 'dark' ? 0.25 : 0.06,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 2,
+    },
+    cardTitle: {
+      fontWeight: '600',
+      marginBottom: 4,
+      fontSize: theme.typography.h2,
+    },
+    cardSubtitle: {
+      // ThemedSubText ya gestiona color, aquí solo tamaño si quieres
+    },
+    cardActions: {
+      flexDirection: 'row',
+      marginLeft: theme.spacing.sm,
+    },
+    btn: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: theme.radii.button,
+      borderWidth: 1,
+    },
+    btnDone: {
+      backgroundColor: theme.mode === 'dark' ? 'rgba(34,197,94,0.15)' : '#e6f6ed',
+      borderColor: theme.colors.success,
+    },
+    btnDoneText: {
+      color: theme.colors.success,
+      fontWeight: '700',
+    },
+    btnSkip: {
+      backgroundColor: theme.mode === 'dark' ? 'rgba(234,88,12,0.15)' : '#fff5f5',
+      borderColor: theme.colors.warning,
+      marginLeft: theme.spacing.xs,
+    },
+    btnSkipText: {
+      color: theme.colors.warning,
+      fontWeight: '700',
+    },
+  });
