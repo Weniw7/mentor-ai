@@ -1,12 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { useTasksStore } from '../store/useTasksStore';
-import { useTheme } from '../theme/ThemeContext';
-import type { Theme } from '../theme/tokens';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { useTasksStore, selectTodoTasks } from '../store/useTasksStore';
 
 export default function TodayScreen() {
   const brief = useTasksStore(s => s.brief);
-  const tasks = useTasksStore(s => s.tasks);
+  const todoTasks = useTasksStore(selectTodoTasks);
   const isLoading = useTasksStore(s => s.isLoading);
   const hydrate = useTasksStore(s => s.hydrate);
   const markDone = useTasksStore(s => s.markDone);
@@ -15,20 +13,6 @@ export default function TodayScreen() {
   const motivationalQuote = useTasksStore(s => s.motivationalQuote);
   const history = useTasksStore(s => s.history);
 
-  const { theme } = useTheme();
-  const styles = useMemo(() => getStyles(theme), [theme]);
-
-  // Animated refs per item for Done effect
-  const animRefs = useRef(new Map<string, { opacity: Animated.Value; scale: Animated.Value }>());
-  const getAnim = (id: string) => {
-    let ref = animRefs.current.get(id);
-    if (!ref) {
-      ref = { opacity: new Animated.Value(1), scale: new Animated.Value(1) };
-      animRefs.current.set(id, ref);
-    }
-    return ref;
-  };
-
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -36,41 +20,19 @@ export default function TodayScreen() {
     hydrate();
   }, [hydrate]);
 
-  const todoTasks = useMemo(
-    () => tasks.filter(t => t.status === 'todo'),
-    [tasks]
-  );
-
   const todayKey = new Date().toISOString().slice(0, 10);
   const todayStats = history?.[todayKey] ?? { completed: 0, skipped: 0, totalTimeDone: 0 };
 
   const handleDone = async (id: string) => {
     setProcessingId(id);
-
-    const anim = getAnim(id);
-    Animated.parallel([
-      Animated.timing(anim.opacity, {
-        toValue: 0,
-        duration: theme.effects.doneFadeMs,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(anim.scale, {
-        toValue: theme.effects.pressScale,
-        duration: theme.effects.doneFadeMs,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start(async () => {
-      await markDone(id);
-      setProcessingId(null);
-    });
+    await markDone(id);
+    setTimeout(() => setProcessingId(null), 250);
   };
 
   const handleSkip = async (id: string) => {
     setProcessingId(id);
     await skip(id);
-    setTimeout(() => setProcessingId(null), theme.effects.doneFadeMs);
+    setTimeout(() => setProcessingId(null), 250);
   };
 
   const onRefresh = async () => {
@@ -84,7 +46,7 @@ export default function TodayScreen() {
     if (isLoading) {
       return (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={theme.colors.accent} />
+          <ActivityIndicator size="large" />
           <Text style={styles.helperText}>Cargando el brief del día...</Text>
         </View>
       );
@@ -110,144 +72,131 @@ export default function TodayScreen() {
             <Text style={styles.helperText}>No hay tareas para hoy.</Text>
           </View>
         }
-        renderItem={({ item }) => {
-          const anim = getAnim(item.id);
-          return (
-            <Animated.View style={[styles.card, { opacity: anim.opacity, transform: [{ scale: anim.scale }] }] }>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardSubtitle}>{item.duration} min</Text>
-              </View>
-              <View style={styles.cardActions}>
-                <Pressable
-                  style={({ pressed }) => [styles.btn, styles.btnDone, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
-                  onPress={() => handleDone(item.id)}
-                  disabled={processingId === item.id || isLoading}
-                >
-                  <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.btn, styles.btnSkip, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
-                  onPress={() => handleSkip(item.id)}
-                  disabled={processingId === item.id || isLoading}
-                >
-                  <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
-                </Pressable>
-              </View>
-            </Animated.View>
-          );
-        }}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>{item.title}</Text>
+              <Text style={styles.cardSubtitle}>{item.duration} min</Text>
+            </View>
+            <View style={styles.cardActions}>
+              <Pressable
+                style={[styles.btn, styles.btnDone]}
+                onPress={() => handleDone(item.id)}
+                disabled={processingId === item.id || isLoading}
+              >
+                <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.btn, styles.btnSkip]}
+                onPress={() => handleSkip(item.id)}
+                disabled={processingId === item.id || isLoading}
+              >
+                <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       />
     );
-  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote, todayStats, styles, theme.effects.doneFadeMs, theme.effects.pressScale, theme.colors.accent]);
+  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote, todayStats]);
 
   return <SafeAreaView style={styles.container}>{content}</SafeAreaView>;
 }
 
-function getStyles(theme: Theme) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.bg,
-    },
-    centered: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: theme.spacing.md,
-    },
-    helperText: {
-      marginTop: theme.spacing.xs,
-      color: theme.colors.subtext,
-      textAlign: 'center',
-      fontSize: theme.typography.body,
-    },
-    listContainer: {
-      padding: theme.spacing.md,
-      paddingBottom: theme.spacing.lg,
-    },
-    title: {
-      fontSize: theme.typography.h1,
-      fontWeight: '700',
-      marginBottom: theme.spacing.xs,
-      color: theme.colors.text,
-    },
-    quote: {
-      fontSize: theme.typography.h2,
-      fontWeight: '700',
-      textAlign: 'center',
-      color: theme.colors.text,
-      fontStyle: 'italic',
-      marginBottom: theme.spacing.sm,
-    },
-    todayStats: {
-      fontSize: theme.typography.body,
-      color: theme.colors.subtext,
-      marginBottom: theme.spacing.md,
-    },
-    card: {
-      backgroundColor: theme.colors.card,
-      borderRadius: theme.radii.card,
-      padding: theme.spacing.md,
-      marginBottom: theme.spacing.md,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      shadowColor: '#000',
-      shadowOpacity: 0.05,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
-    },
-    cardTitle: {
-      fontSize: theme.typography.body,
-      fontWeight: '600',
-      color: theme.colors.text,
-      marginBottom: 4,
-    },
-    cardSubtitle: {
-      fontSize: Math.max(12, theme.typography.body - 2),
-      color: theme.colors.subtext,
-    },
-    cardActions: {
-      flexDirection: 'row',
-      gap: theme.spacing.sm,
-    },
-    btn: {
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: theme.radii.button,
-      borderWidth: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    btnText: {
-      fontSize: Math.max(12, theme.typography.body - 2),
-      fontWeight: '600',
-    },
-    btnDone: {
-      backgroundColor: hexWithAlpha(theme.colors.success, 0.12),
-      borderColor: theme.colors.success,
-    },
-    btnDoneText: {
-      color: theme.colors.success,
-    },
-    btnSkip: {
-      backgroundColor: hexWithAlpha(theme.colors.warning, 0.12),
-      borderColor: theme.colors.warning,
-      marginLeft: theme.spacing.xs,
-    },
-    btnSkipText: {
-      color: theme.colors.warning,
-    },
-  });
-}
-
-function hexWithAlpha(hex: string, alpha: number): string {
-  let c = hex.replace('#', '');
-  if (c.length === 3) c = c.split('').map((x) => x + x).join('');
-  const a = Math.round(Math.min(1, Math.max(0, alpha)) * 255);
-  const aa = a.toString(16).padStart(2, '0').toUpperCase();
-  return `#${c}${aa}`;
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f7f7',
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  helperText: {
+    marginTop: 8,
+    color: '#666',
+    textAlign: 'center',
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#c00',
+  },
+  listContainer: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 4,
+    color: '#111',
+  },
+  quote: {
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: '#222',
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  todayStats: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 12,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#222',
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  btn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  btnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  btnDone: {
+    backgroundColor: '#e6f6ed',
+    borderColor: '#2ea043',
+  },
+  btnDoneText: {
+    color: '#2ea043',
+  },
+  btnSkip: {
+    backgroundColor: '#fff5f5',
+    borderColor: '#d93025',
+    marginLeft: 8,
+  },
+  btnSkipText: {
+    color: '#d93025',
+  },
+});
