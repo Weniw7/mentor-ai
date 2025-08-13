@@ -94,51 +94,60 @@ export default function TodayScreen() {
         data={todoTasks}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={
-          <View>
-            {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
-            <Text style={styles.title}>{brief || 'Brief del día'}</Text>
-            <Text style={styles.todayStats}>
-              Hoy: {todayStats.completed} completadas, {todayStats.skipped} skip, {todayStats.totalTimeDone} min ahorrados
-            </Text>
-          </View>
-        }
-        contentContainerStyle={styles.listContainer}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        ListEmptyComponent={
-          <View style={styles.centered}>
-            <Text style={styles.helperText}>No hay tareas para hoy.</Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const anim = getAnim(item.id);
-          return (
-            <Animated.View style={[styles.card, { opacity: anim.opacity, transform: [{ scale: anim.scale }] }] }>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardSubtitle}>{item.duration} min</Text>
+              <View>
+                {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={styles.title}>{brief || 'Brief del día'}</Text>
+                  <Pressable
+                    style={({ pressed }) => [styles.btn, styles.btnReplan, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
+                    onPress={onRefresh}
+                    disabled={refreshing || isLoading}
+                  >
+                    <Text style={[styles.btnText, styles.btnReplanText]}>{refreshing ? '...' : 'Replan'}</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.todayStats}>
+                  Hoy: {todayStats.completed} completadas, {todayStats.skipped} skip, {todayStats.totalTimeDone} min ahorrados
+                </Text>
               </View>
-              <View style={styles.cardActions}>
-                <Pressable
-                  style={({ pressed }) => [styles.btn, styles.btnDone, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
-                  onPress={() => handleDone(item.id)}
-                  disabled={processingId === item.id || isLoading}
-                >
-                  <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.btn, styles.btnSkip, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
-                  onPress={() => handleSkip(item.id)}
-                  disabled={processingId === item.id || isLoading}
-                >
-                  <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
-                </Pressable>
+            }
+            contentContainerStyle={styles.listContainer}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            ListEmptyComponent={
+              <View style={styles.centered}>
+                <Text style={styles.helperText}>No hay tareas para hoy.</Text>
               </View>
-            </Animated.View>
-          );
-        }}
-      />
-    );
+            }
+            renderItem={({ item }) => {
+              const anim = getAnim(item.id);
+              return (
+                <Animated.View style={[styles.card, { opacity: anim.opacity, transform: [{ scale: anim.scale }] }] }>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    <Text style={styles.cardSubtitle}>{item.duration} min</Text>
+                  </View>
+                  <View style={styles.cardActions}>
+                    <Pressable
+                      style={({ pressed }) => [styles.btn, styles.btnDone, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
+                      onPress={() => handleDone(item.id)}
+                      disabled={processingId === item.id || isLoading}
+                    >
+                      <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [styles.btn, styles.btnSkip, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
+                      onPress={() => handleSkip(item.id)}
+                      disabled={processingId === item.id || isLoading}
+                    >
+                      <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
+                    </Pressable>
+                  </View>
+                </Animated.View>
+              );
+            }}
+          />
+        );
   }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote, todayStats, styles, theme.effects.doneFadeMs, theme.effects.pressScale, theme.colors.accent]);
 
   return <SafeAreaView style={styles.container}>{content}</SafeAreaView>;
@@ -240,6 +249,13 @@ function getStyles(theme: Theme) {
     },
     btnSkipText: {
       color: theme.colors.warning,
+    },
+    btnReplan: {
+      backgroundColor: hexWithAlpha(theme.colors.accent, 0.12),
+      borderColor: theme.colors.accent,
+    },
+    btnReplanText: {
+      color: theme.colors.accent,
     },
   });
 }
