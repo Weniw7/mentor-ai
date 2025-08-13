@@ -194,7 +194,7 @@ function getStyles(theme: Theme) {
       alignItems: 'center',
       borderWidth: 1,
       borderColor: theme.colors.border,
-      shadowColor: '#000',
+      shadowColor: theme.colors.text,
       shadowOpacity: 0.05,
       shadowRadius: 6,
       shadowOffset: { width: 0, height: 2 },
@@ -204,7 +204,7 @@ function getStyles(theme: Theme) {
       fontSize: theme.typography.body,
       fontWeight: '600',
       color: theme.colors.text,
-      marginBottom: 4,
+      marginBottom: theme.spacing.xs,
     },
     cardSubtitle: {
       fontSize: Math.max(12, theme.typography.body - 2),
@@ -215,8 +215,8 @@ function getStyles(theme: Theme) {
       gap: theme.spacing.sm,
     },
     btn: {
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingHorizontal: theme.spacing.sm + 4,
+      paddingVertical: theme.spacing.xs + 4,
       borderRadius: theme.radii.button,
       borderWidth: 1,
       alignItems: 'center',
