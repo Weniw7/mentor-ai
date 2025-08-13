@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
+import type { Theme } from '../theme/tokens';
 
 interface ChatMessage {
   id: string;
@@ -14,6 +16,9 @@ const MOCK_MESSAGES: ChatMessage[] = [
 ];
 
 export default function ChatScreen() {
+  const { theme } = useTheme();
+  const styles = useMemo(() => getStyles(theme), [theme]);
+
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
@@ -28,50 +33,62 @@ export default function ChatScreen() {
       />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.inputBar}>
-          <TextInput style={styles.input} placeholder="Escribe un mensaje..." editable={false} />
+          <TextInput
+            style={styles.input}
+            placeholder="Escribe un mensaje..."
+            placeholderTextColor={theme.colors.subtext}
+            editable={false}
+          />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f7f7f7',
-  },
-  messagesContainer: {
-    padding: 16,
-  },
-  bubble: {
-    maxWidth: '80%',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  userBubble: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#DCF8C6',
-  },
-  assistantBubble: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#fff',
-  },
-  bubbleText: {
-    color: '#111',
-  },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
-  },
-  input: {
-    flex: 1,
-    height: 40,
-    paddingHorizontal: 12,
-  },
-});
+function getStyles(theme: Theme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.bg,
+    },
+    messagesContainer: {
+      padding: theme.spacing.md,
+    },
+    bubble: {
+      maxWidth: '80%',
+      paddingHorizontal: theme.spacing.sm + 4,
+      paddingVertical: theme.spacing.xs + 4,
+      borderRadius: theme.radii.card,
+      marginBottom: theme.spacing.sm + 2,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    userBubble: {
+      alignSelf: 'flex-end',
+      backgroundColor: theme.colors.card,
+    },
+    assistantBubble: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.card,
+    },
+    bubbleText: {
+      color: theme.colors.text,
+      fontSize: theme.typography.body,
+    },
+    inputBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: theme.spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
+    },
+    input: {
+      flex: 1,
+      height: 40,
+      paddingHorizontal: theme.spacing.sm,
+      color: theme.colors.text,
+      fontSize: theme.typography.body,
+    },
+  });
+}

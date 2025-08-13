@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { SafeAreaView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useTheme } from '../theme/ThemeContext';
+import type { Theme } from '../theme/tokens';
 
 export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true);
   const [briefHour, setBriefHour] = useState<string>('08:30');
+  const { theme } = useTheme();
+  const styles = useMemo(() => getStyles(theme), [theme]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -30,44 +34,51 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f7f7f7',
-    padding: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 16,
-    color: '#111',
-  },
-  row: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222',
-  },
-  helper: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-  },
-  timeBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-  },
-  timeText: {
-    fontWeight: '600',
-    color: '#333',
-  },
-});
+function getStyles(theme: Theme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.bg,
+      padding: theme.spacing.md,
+    },
+    title: {
+      fontSize: theme.typography.h1,
+      fontWeight: '700',
+      marginBottom: theme.spacing.md,
+      color: theme.colors.text,
+    },
+    row: {
+      backgroundColor: theme.colors.card,
+      borderRadius: theme.radii.card,
+      padding: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    label: {
+      fontSize: theme.typography.body,
+      fontWeight: '600',
+      color: theme.colors.text,
+    },
+    helper: {
+      fontSize: Math.max(12, theme.typography.body - 4),
+      color: theme.colors.subtext,
+      marginTop: theme.spacing.xs,
+    },
+    timeBadge: {
+      paddingHorizontal: theme.spacing.sm + 4,
+      paddingVertical: theme.spacing.xs + 2,
+      backgroundColor: theme.colors.bg,
+      borderRadius: theme.radii.button,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    timeText: {
+      fontWeight: '600',
+      color: theme.colors.text,
+      fontSize: theme.typography.body,
+    },
+  });
+}
