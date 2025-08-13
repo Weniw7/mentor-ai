@@ -1,25 +1,39 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { useTasksStore } from '../store/useTasksStore';
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  FlatList,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useTasksStore, selectTodoTasks } from '../store/useTasksStore';
 import { useTheme } from '../theme/ThemeContext';
 import type { Theme } from '../theme/tokens';
 
 export default function TodayScreen() {
-  const brief = useTasksStore(s => s.brief);
-  const tasks = useTasksStore(s => s.tasks);
-  const isLoading = useTasksStore(s => s.isLoading);
-  const hydrate = useTasksStore(s => s.hydrate);
-  const markDone = useTasksStore(s => s.markDone);
-  const skip = useTasksStore(s => s.skip);
-  const replan = useTasksStore(s => s.replan);
-  const motivationalQuote = useTasksStore(s => s.motivationalQuote);
-  const history = useTasksStore(s => s.history);
+  // Store
+  const brief = useTasksStore((s) => s.brief);
+  const todoTasks = useTasksStore(selectTodoTasks);
+  const isLoading = useTasksStore((s) => s.isLoading);
+  const hydrate = useTasksStore((s) => s.hydrate);
+  const markDone = useTasksStore((s) => s.markDone);
+  const skip = useTasksStore((s) => s.skip);
+  const replan = useTasksStore((s) => s.replan);
+  const motivationalQuote = useTasksStore((s) => s.motivationalQuote);
+  const history = useTasksStore((s) => s.history);
 
+  // Theme
   const { theme } = useTheme();
   const styles = useMemo(() => getStyles(theme), [theme]);
 
-  // Animated refs per item for Done effect
-  const animRefs = useRef(new Map<string, { opacity: Animated.Value; scale: Animated.Value }>());
+  // Anim refs por item (para Done)
+  const animRefs = useRef(
+    new Map<string, { opacity: Animated.Value; scale: Animated.Value }>(),
+  );
   const getAnim = (id: string) => {
     let ref = animRefs.current.get(id);
     if (!ref) {
@@ -29,6 +43,7 @@ export default function TodayScreen() {
     return ref;
   };
 
+  // UI state
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -36,17 +51,13 @@ export default function TodayScreen() {
     hydrate();
   }, [hydrate]);
 
-  const todoTasks = useMemo(
-    () => tasks.filter(t => t.status === 'todo'),
-    [tasks]
-  );
-
   const todayKey = new Date().toISOString().slice(0, 10);
   const todayStats = history?.[todayKey] ?? { completed: 0, skipped: 0, totalTimeDone: 0 };
 
   const handleDone = async (id: string) => {
     setProcessingId(id);
 
+    // Animación suave y luego mutamos estado
     const anim = getAnim(id);
     Animated.parallel([
       Animated.timing(anim.opacity, {
@@ -64,6 +75,9 @@ export default function TodayScreen() {
     ]).start(async () => {
       await markDone(id);
       setProcessingId(null);
+      // reset anim state para cuando se regenere la lista
+      anim.opacity.setValue(1);
+      anim.scale.setValue(1);
     });
   };
 
@@ -80,6 +94,31 @@ export default function TodayScreen() {
     setRefreshing(false);
   };
 
+  const header = (
+    <View>
+      {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
+
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>{brief || 'Brief del día'}</Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.btn,
+            styles.btnReplan,
+            pressed && { transform: [{ scale: theme.effects.pressScale }] },
+          ]}
+          onPress={onRefresh}
+          disabled={refreshing || isLoading}
+        >
+          <Text style={[styles.btnText, styles.btnReplanText]}>{refreshing ? '...' : 'Replan'}</Text>
+        </Pressable>
+      </View>
+
+      <Text style={styles.todayStats}>
+        Hoy: {todayStats.completed} completadas, {todayStats.skipped} skip, {todayStats.totalTimeDone} min ahorrados
+      </Text>
+    </View>
+  );
+
   const content = useMemo(() => {
     if (isLoading) {
       return (
@@ -89,66 +128,77 @@ export default function TodayScreen() {
         </View>
       );
     }
+
     return (
       <FlatList
         data={todoTasks}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-              <View>
-                {motivationalQuote ? <Text style={styles.quote}>{motivationalQuote}</Text> : null}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={styles.title}>{brief || 'Brief del día'}</Text>
-                  <Pressable
-                    style={({ pressed }) => [styles.btn, styles.btnReplan, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
-                    onPress={onRefresh}
-                    disabled={refreshing || isLoading}
-                  >
-                    <Text style={[styles.btnText, styles.btnReplanText]}>{refreshing ? '...' : 'Replan'}</Text>
-                  </Pressable>
-                </View>
-                <Text style={styles.todayStats}>
-                  Hoy: {todayStats.completed} completadas, {todayStats.skipped} skip, {todayStats.totalTimeDone} min ahorrados
-                </Text>
+        ListHeaderComponent={header}
+        contentContainerStyle={styles.listContainer}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        ListEmptyComponent={
+          <View style={styles.centered}>
+            <Text style={styles.helperText}>No hay tareas para hoy.</Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const anim = getAnim(item.id);
+          return (
+            <Animated.View
+              style={[
+                styles.card,
+                { opacity: anim.opacity, transform: [{ scale: anim.scale }] },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardSubtitle}>{item.duration} min</Text>
               </View>
-            }
-            contentContainerStyle={styles.listContainer}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            ListEmptyComponent={
-              <View style={styles.centered}>
-                <Text style={styles.helperText}>No hay tareas para hoy.</Text>
+
+              <View style={styles.cardActions}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.btn,
+                    styles.btnDone,
+                    pressed && { transform: [{ scale: theme.effects.pressScale }] },
+                  ]}
+                  onPress={() => handleDone(item.id)}
+                  disabled={processingId === item.id || isLoading}
+                >
+                  <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.btn,
+                    styles.btnSkip,
+                    pressed && { transform: [{ scale: theme.effects.pressScale }] },
+                  ]}
+                  onPress={() => handleSkip(item.id)}
+                  disabled={processingId === item.id || isLoading}
+                >
+                  <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
+                </Pressable>
               </View>
-            }
-            renderItem={({ item }) => {
-              const anim = getAnim(item.id);
-              return (
-                <Animated.View style={[styles.card, { opacity: anim.opacity, transform: [{ scale: anim.scale }] }] }>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{item.title}</Text>
-                    <Text style={styles.cardSubtitle}>{item.duration} min</Text>
-                  </View>
-                  <View style={styles.cardActions}>
-                    <Pressable
-                      style={({ pressed }) => [styles.btn, styles.btnDone, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
-                      onPress={() => handleDone(item.id)}
-                      disabled={processingId === item.id || isLoading}
-                    >
-                      <Text style={[styles.btnText, styles.btnDoneText]}>Done</Text>
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [styles.btn, styles.btnSkip, pressed && { transform: [{ scale: theme.effects.pressScale }] }]}
-                      onPress={() => handleSkip(item.id)}
-                      disabled={processingId === item.id || isLoading}
-                    >
-                      <Text style={[styles.btnText, styles.btnSkipText]}>Skip</Text>
-                    </Pressable>
-                  </View>
-                </Animated.View>
-              );
-            }}
-          />
-        );
-  }, [isLoading, todoTasks, brief, refreshing, processingId, motivationalQuote, todayStats, styles, theme.effects.doneFadeMs, theme.effects.pressScale, theme.colors.accent]);
+            </Animated.View>
+          );
+        }}
+      />
+    );
+  }, [
+    isLoading,
+    todoTasks,
+    brief,
+    refreshing,
+    processingId,
+    motivationalQuote,
+    todayStats,
+    styles,
+    theme.colors.accent,
+    theme.effects.doneFadeMs,
+    theme.effects.pressScale,
+  ]);
 
   return <SafeAreaView style={styles.container}>{content}</SafeAreaView>;
 }
@@ -174,6 +224,11 @@ function getStyles(theme: Theme) {
     listContainer: {
       padding: theme.spacing.md,
       paddingBottom: theme.spacing.lg,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
     },
     title: {
       fontSize: theme.typography.h1,
@@ -253,13 +308,19 @@ function getStyles(theme: Theme) {
     btnReplan: {
       backgroundColor: hexWithAlpha(theme.colors.accent, 0.12),
       borderColor: theme.colors.accent,
+      paddingHorizontal: theme.spacing.sm + 6,
+      paddingVertical: theme.spacing.xs + 2,
+      borderRadius: theme.radii.button,
     },
     btnReplanText: {
       color: theme.colors.accent,
+      fontWeight: '700',
+      fontSize: Math.max(12, theme.typography.body - 2),
     },
   });
 }
 
+// Utilidad: hex + alpha a RGBA hexa (#RRGGBBAA)
 function hexWithAlpha(hex: string, alpha: number): string {
   let c = hex.replace('#', '');
   if (c.length === 3) c = c.split('').map((x) => x + x).join('');

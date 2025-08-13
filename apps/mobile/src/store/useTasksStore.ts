@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { replanHeuristic } from '../ai/planner';
 
+// ========================
+// Tipos
+// ========================
 export type Task = {
   id: string;
   title: string;
@@ -13,10 +16,11 @@ export type Task = {
   tags?: string[];
 };
 
-// Añadimos tipos para historial diario
 type DayKey = string;
 type HistoryEntry = { completed: number; skipped: number; totalTimeDone: number };
 type HistoryRecord = Record<DayKey, HistoryEntry>;
+
+export type LastAction = { type: 'done' | 'skip'; task: Task };
 
 export type UserPrefs = {
   wake: string;
@@ -32,31 +36,37 @@ const DEFAULT_USER_PREFS: UserPrefs = {
     { start: '09:00', end: '12:00' },
     { start: '15:00', end: '18:00' },
   ],
-  preferredHours: [
-    { start: '09:00', end: '18:00' },
-  ],
+  preferredHours: [{ start: '09:00', end: '18:00' }],
 };
 
+// ========================
+// Utils de tareas y quotes
+// ========================
 function withTaskDefaults(input: any): Task {
-  const energy = input?.energy === 'low' || input?.energy === 'med' || input?.energy === 'high' ? input.energy : 'med';
-  const priority = [1, 2, 3, 4, 5].includes(input?.priority) ? (input.priority as 1 | 2 | 3 | 4 | 5) : 3;
-  const tags: string[] | undefined = Array.isArray(input?.tags) ? input.tags.filter((t: any) => typeof t === 'string') : undefined;
+  const energy =
+    input?.energy === 'low' || input?.energy === 'med' || input?.energy === 'high'
+      ? input.energy
+      : 'med';
+  const priority = [1, 2, 3, 4, 5].includes(input?.priority)
+    ? (input.priority as 1 | 2 | 3 | 4 | 5)
+    : 3;
+  const tags: string[] | undefined = Array.isArray(input?.tags)
+    ? input.tags.filter((t: any) => typeof t === 'string')
+    : undefined;
   const title = typeof input?.title === 'string' ? input.title : '';
   const duration = typeof input?.duration === 'number' ? input.duration : 0;
-  const id = typeof input?.id === 'string' ? input.id : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const status: 'todo' | 'done' | 'skipped' = input?.status === 'done' || input?.status === 'skipped' ? input.status : 'todo';
+  const id =
+    typeof input?.id === 'string'
+      ? input.id
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const status: 'todo' | 'done' | 'skipped' =
+    input?.status === 'done' || input?.status === 'skipped' ? input.status : 'todo';
   const deadline = typeof input?.deadline === 'string' ? input.deadline : undefined;
   return { id, title, duration, status, energy, priority, deadline, tags };
 }
 
 function tasksWithDefaults(tasks: any[]): Task[] {
   return (Array.isArray(tasks) ? tasks : []).map(withTaskDefaults);
-}
-
-function computeBrief(tasks: Task[]): string {
-  const todo = tasks.filter(t => t.status === 'todo');
-  const totalMin = todo.reduce((sum, t) => sum + (t.duration || 0), 0);
-  return `Tienes ${todo.length} tareas (~${totalMin} min)`;
 }
 
 const QUOTES: string[] = [
@@ -89,12 +99,14 @@ function dayOfYearFromKey(key: string): number {
 }
 
 function pickQuoteForDay(key: string): string {
-  const idx = (dayOfYearFromKey(key) + key.split('-').reduce((a, p) => a + Number(p), 0)) % QUOTES.length;
+  const idx =
+    (dayOfYearFromKey(key) + key.split('-').reduce((a, p) => a + Number(p), 0)) %
+    QUOTES.length;
   return QUOTES[idx];
 }
 
 function pickRandomQuoteDifferent(previous?: string): string {
-  const pool = QUOTES.filter(q => q !== previous);
+  const pool = QUOTES.filter((q) => q !== previous);
   return pool[Math.floor(Math.random() * pool.length)] || QUOTES[0];
 }
 
@@ -115,9 +127,16 @@ function aggregateStatsForTasks(tasks: Task[]): HistoryEntry {
   return acc;
 }
 
-type LastAction = { type: 'done' | 'skip'; task: Task };
+function computeBrief(tasks: Task[]): string {
+  const todo = tasks.filter((t) => t.status === 'todo');
+  const totalMin = todo.reduce((sum, t) => sum + (t.duration || 0), 0);
+  return `Tienes ${todo.length} tareas (~${totalMin} min)`;
+}
 
-type TasksStore = {
+// ========================
+// Store
+// ========================
+export type TasksStore = {
   brief: string;
   motivationalQuote: string;
   tasks: Task[];
@@ -128,13 +147,20 @@ type TasksStore = {
   userPrefs: UserPrefs;
 
   hydrate: () => Promise<void>;
-  addTask: (t: Omit<Task, 'status' | 'energy' | 'priority'> & Partial<Pick<Task, 'energy' | 'priority' | 'deadline' | 'tags'>>) => Promise<void>;
+  addTask: (
+    t: Omit<Task, 'status' | 'energy' | 'priority'> &
+      Partial<Pick<Task, 'energy' | 'priority' | 'deadline' | 'tags'>>
+  ) => Promise<void>;
   markDone: (id: string) => Promise<void>;
   skip: (id: string) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   replan: () => Promise<void>;
   recalcBrief: () => void;
+  setMotivationalQuote: (dateKey: string) => Promise<void>;
 };
+
+export const selectTodoTasks = (state: TasksStore) =>
+  state.tasks.filter((t) => t.status === 'todo');
 
 const STORAGE_KEY = 'mentorai:store';
 
@@ -148,6 +174,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   lastDayKey: undefined,
   userPrefs: DEFAULT_USER_PREFS,
 
+  // ========= hydrate =========
   hydrate: async () => {
     set({ isLoading: true });
     try {
@@ -161,19 +188,32 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
           typeof data?.brief === 'string' && data.brief.length > 0
             ? data.brief
             : computeBrief(tasks);
+
         const storedKey: string | undefined =
           typeof data?.lastDayKey === 'string'
             ? data.lastDayKey
             : typeof data?.dateKey === 'string'
-              ? data.dateKey
-              : undefined;
-        const storedQuote: string | undefined = typeof data?.motivationalQuote === 'string' ? data.motivationalQuote : undefined;
+            ? data.dateKey
+            : undefined;
+
+        const storedQuote: string | undefined =
+          typeof data?.motivationalQuote === 'string' ? data.motivationalQuote : undefined;
+
         const motivationalQuote =
           storedKey === todayKey && storedQuote ? storedQuote : pickQuoteForDay(todayKey);
-        const history: HistoryRecord = data?.history && typeof data.history === 'object' ? (data.history as HistoryRecord) : {};
-        const userPrefs: UserPrefs = data?.userPrefs && typeof data.userPrefs === 'object' ? { ...DEFAULT_USER_PREFS, ...data.userPrefs } : DEFAULT_USER_PREFS;
+
+        const history: HistoryRecord =
+          data?.history && typeof data.history === 'object'
+            ? (data.history as HistoryRecord)
+            : {};
+
+        const userPrefs: UserPrefs =
+          data?.userPrefs && typeof data.userPrefs === 'object'
+            ? { ...DEFAULT_USER_PREFS, ...data.userPrefs }
+            : DEFAULT_USER_PREFS;
 
         if (storedKey && storedKey !== todayKey) {
+          // Cierra el día anterior y resetea tareas
           const aggregated = aggregateStatsForTasks(tasks);
           const prevEntry = history[storedKey] ?? emptyHistoryEntry();
           const nextHistory: HistoryRecord = {
@@ -185,32 +225,75 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
             },
           };
 
-          set({ history: nextHistory, lastDayKey: todayKey, isLoading: false, lastAction: undefined, userPrefs });
+          set({
+            history: nextHistory,
+            lastDayKey: todayKey,
+            isLoading: false,
+            lastAction: undefined,
+            userPrefs,
+          });
+
           try {
             await AsyncStorage.setItem(
               STORAGE_KEY,
-              JSON.stringify({ tasks: [], brief: computeBrief([]), motivationalQuote: pickQuoteForDay(todayKey), history: nextHistory, lastDayKey: todayKey, userPrefs })
+              JSON.stringify({
+                tasks: [],
+                brief: computeBrief([]),
+                motivationalQuote: pickQuoteForDay(todayKey),
+                history: nextHistory,
+                lastDayKey: todayKey,
+                userPrefs,
+              })
             );
           } catch {}
 
           await get().replan();
         } else {
-          set({ tasks, brief, motivationalQuote, history, lastDayKey: todayKey, isLoading: false, lastAction: undefined, userPrefs });
+          set({
+            tasks,
+            brief,
+            motivationalQuote,
+            history,
+            lastDayKey: todayKey,
+            isLoading: false,
+            lastAction: undefined,
+            userPrefs,
+          });
           try {
             await AsyncStorage.setItem(
               STORAGE_KEY,
-              JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: todayKey, userPrefs })
+              JSON.stringify({
+                tasks,
+                brief,
+                motivationalQuote,
+                history,
+                lastDayKey: todayKey,
+                userPrefs,
+              })
             );
           } catch {}
         }
       } else {
         const motivationalQuote = pickQuoteForDay(todayKey);
-        set({ motivationalQuote, history: {}, lastDayKey: todayKey, isLoading: false, userPrefs: DEFAULT_USER_PREFS });
+        set({
+          motivationalQuote,
+          history: {},
+          lastDayKey: todayKey,
+          isLoading: false,
+          userPrefs: DEFAULT_USER_PREFS,
+        });
         try {
           const { tasks, brief } = get();
           await AsyncStorage.setItem(
             STORAGE_KEY,
-            JSON.stringify({ tasks, brief, motivationalQuote, history: {}, lastDayKey: todayKey, userPrefs: DEFAULT_USER_PREFS })
+            JSON.stringify({
+              tasks,
+              brief,
+              motivationalQuote,
+              history: {},
+              lastDayKey: todayKey,
+              userPrefs: DEFAULT_USER_PREFS,
+            })
           );
         } catch {}
       }
@@ -220,12 +303,24 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   },
 
   recalcBrief: () => {
-    set(state => ({ brief: computeBrief(state.tasks) }));
+    set((state) => ({ brief: computeBrief(state.tasks) }));
+  },
+
+  setMotivationalQuote: async (dateKey: string) => {
+    const motivationalQuote = pickQuoteForDay(dateKey);
+    set({ motivationalQuote, lastDayKey: dateKey });
+    try {
+      const { tasks, brief, history, userPrefs } = get();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: dateKey, userPrefs })
+      );
+    } catch {}
   },
 
   addTask: async (t) => {
     const defaults: Pick<Task, 'energy' | 'priority'> = { energy: 'med', priority: 3 };
-    set(state => ({
+    set((state) => ({
       tasks: [...state.tasks, withTaskDefaults({ ...t, status: 'todo', ...defaults })],
     }));
     get().recalcBrief();
@@ -239,16 +334,16 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   },
 
   markDone: async (id) => {
-    const current = get().tasks.find(t => t.id === id);
+    const current = get().tasks.find((t) => t.id === id);
     if (!current) return;
 
     const updatedTask: Task = { ...current, status: 'done' };
     const addDuration = current.duration || 0;
-    set(state => {
+    set((state) => {
       const todayKey = getTodayKey();
       const prev = state.history[todayKey] ?? emptyHistoryEntry();
       return {
-        tasks: state.tasks.map(t => (t.id === id ? updatedTask : t)),
+        tasks: state.tasks.map((t) => (t.id === id ? updatedTask : t)),
         lastAction: { type: 'done', task: updatedTask },
         history: {
           ...state.history,
@@ -271,15 +366,15 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   },
 
   skip: async (id) => {
-    const current = get().tasks.find(t => t.id === id);
+    const current = get().tasks.find((t) => t.id === id);
     if (!current) return;
 
     const updatedTask: Task = { ...current, status: 'skipped' };
-    set(state => {
+    set((state) => {
       const todayKey = getTodayKey();
       const prev = state.history[todayKey] ?? emptyHistoryEntry();
       return {
-        tasks: state.tasks.map(t => (t.id === id ? updatedTask : t)),
+        tasks: state.tasks.map((t) => (t.id === id ? updatedTask : t)),
         lastAction: { type: 'skip', task: updatedTask },
         history: {
           ...state.history,
@@ -302,8 +397,8 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   },
 
   removeTask: async (id) => {
-    set(state => ({
-      tasks: state.tasks.filter(t => t.id !== id),
+    set((state) => ({
+      tasks: state.tasks.filter((t) => t.id !== id),
     }));
     get().recalcBrief();
     try {
@@ -315,16 +410,19 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     } catch {}
   },
 
+  // ========= replan (heurístico local con prefs) =========
   replan: async () => {
     const allTasks = tasksWithDefaults(get().tasks);
-    const todo = allTasks.filter(t => t.status === 'todo');
-    const others = allTasks.filter(t => t.status !== 'todo');
+    const todo = allTasks.filter((t) => t.status === 'todo');
+    const others = allTasks.filter((t) => t.status !== 'todo');
 
     const { userPrefs } = get();
     const plan = replanHeuristic({ tasks: todo, userPrefs });
 
-    const idToTask = new Map(allTasks.map(t => [t.id, t] as const));
-    const plannedTodo = plan.order.map(id => idToTask.get(id)).filter((t): t is Task => !!t);
+    const idToTask = new Map(allTasks.map((t) => [t.id, t] as const));
+    const plannedTodo = plan.order
+      .map((id) => idToTask.get(id))
+      .filter((t): t is Task => !!t);
     const newTasks = [...plannedTodo, ...others];
 
     const nextQuote = pickRandomQuoteDifferent(get().motivationalQuote);

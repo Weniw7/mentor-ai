@@ -6,6 +6,7 @@ import type { Theme } from '../theme/tokens';
 export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true);
   const [briefHour, setBriefHour] = useState<string>('08:30');
+
   const { theme } = useTheme();
   const styles = useMemo(() => getStyles(theme), [theme]);
 
@@ -18,7 +19,10 @@ export default function SettingsScreen() {
           <Text style={styles.label}>Notificaciones</Text>
           <Text style={styles.helper}>Activar recordatorios para el brief</Text>
         </View>
-        <Switch value={notificationsEnabled} onValueChange={() => setNotificationsEnabled((v) => !v)} disabled 
+        <Switch
+          value={notificationsEnabled}
+          onValueChange={() => setNotificationsEnabled((v) => !v)}
+          disabled
           trackColor={{ false: theme.colors.border, true: theme.colors.accent }}
           thumbColor={theme.colors.card}
           ios_backgroundColor={theme.colors.border}
@@ -28,7 +32,7 @@ export default function SettingsScreen() {
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
           <Text style={styles.label}>Hora del brief</Text>
-          <Text style={styles.helper}>Selecciona una hora (mock)</Text>
+        <Text style={styles.helper}>Selecciona una hora (mock)</Text>
         </View>
         <View style={styles.timeBadge}>
           <Text style={styles.timeText}>{briefHour}</Text>

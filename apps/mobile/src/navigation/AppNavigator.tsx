@@ -1,10 +1,12 @@
 import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
 import TodayScreen from '../screens/TodayScreen';
 import ChatScreen from '../screens/ChatScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
+
 import ThemeSwitcher from '../components/ThemeSwitcher';
 import { useTheme } from '../theme/ThemeContext';
 import { useProfileStore } from '../store/useProfileStore';
@@ -22,10 +24,10 @@ export default function AppNavigator() {
   const { theme } = useTheme();
   const headerBg = theme.colors.headerBg ?? theme.colors.bg;
 
-  const isHydrating = useProfileStore(s => s.isHydrating);
-  const hydrated = useProfileStore(s => s.hydrated);
-  const profile = useProfileStore(s => s.profile);
-  const hydrateProfile = useProfileStore(s => s.hydrate);
+  const isHydrating = useProfileStore((s) => s.isHydrating);
+  const hydrated = useProfileStore((s) => s.hydrated);
+  const profile = useProfileStore((s) => s.profile);
+  const hydrateProfile = useProfileStore((s) => s.hydrate);
 
   useEffect(() => {
     hydrateProfile();
@@ -39,11 +41,11 @@ export default function AppNavigator() {
     );
   }
 
-  const initialRoute = profile ? 'Today' : 'Onboarding';
+  const initialRoute: keyof RootStackParamList = profile ? 'Today' : 'Onboarding';
 
   return (
     <Stack.Navigator
-      initialRouteName={initialRoute as keyof RootStackParamList}
+      initialRouteName={initialRoute}
       screenOptions={{
         headerStyle: { backgroundColor: headerBg },
         headerTintColor: theme.colors.headerText ?? theme.colors.text,
