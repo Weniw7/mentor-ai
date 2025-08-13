@@ -117,6 +117,8 @@ function aggregateStatsForTasks(tasks: Task[]): HistoryEntry {
 
 type LastAction = { type: 'done' | 'skip'; task: Task };
 
+type ReplanOpts = { timeBudget?: number; focusTag?: string };
+
 type TasksStore = {
   brief: string;
   motivationalQuote: string;
@@ -126,14 +128,16 @@ type TasksStore = {
   history: HistoryRecord;
   lastDayKey?: string;
   userPrefs: UserPrefs;
+  muteUntil?: number;
 
   hydrate: () => Promise<void>;
   addTask: (t: Omit<Task, 'status' | 'energy' | 'priority'> & Partial<Pick<Task, 'energy' | 'priority' | 'deadline' | 'tags'>>) => Promise<void>;
   markDone: (id: string) => Promise<void>;
   skip: (id: string) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
-  replan: () => Promise<void>;
+  replan: (opts?: ReplanOpts) => Promise<void>;
   recalcBrief: () => void;
+  setMuteFor: (minutes: number) => Promise<void>;
 };
 
 const STORAGE_KEY = 'mentorai:store';
@@ -147,6 +151,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
   history: {},
   lastDayKey: undefined,
   userPrefs: DEFAULT_USER_PREFS,
+  muteUntil: undefined,
 
   hydrate: async () => {
     set({ isLoading: true });
@@ -172,6 +177,7 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
           storedKey === todayKey && storedQuote ? storedQuote : pickQuoteForDay(todayKey);
         const history: HistoryRecord = data?.history && typeof data.history === 'object' ? (data.history as HistoryRecord) : {};
         const userPrefs: UserPrefs = data?.userPrefs && typeof data.userPrefs === 'object' ? { ...DEFAULT_USER_PREFS, ...data.userPrefs } : DEFAULT_USER_PREFS;
+        const muteUntil: number | undefined = typeof data?.muteUntil === 'number' ? data.muteUntil : undefined;
 
         if (storedKey && storedKey !== todayKey) {
           const aggregated = aggregateStatsForTasks(tasks);
@@ -185,32 +191,32 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
             },
           };
 
-          set({ history: nextHistory, lastDayKey: todayKey, isLoading: false, lastAction: undefined, userPrefs });
+          set({ history: nextHistory, lastDayKey: todayKey, isLoading: false, lastAction: undefined, userPrefs, muteUntil });
           try {
             await AsyncStorage.setItem(
               STORAGE_KEY,
-              JSON.stringify({ tasks: [], brief: computeBrief([]), motivationalQuote: pickQuoteForDay(todayKey), history: nextHistory, lastDayKey: todayKey, userPrefs })
+              JSON.stringify({ tasks: [], brief: computeBrief([]), motivationalQuote: pickQuoteForDay(todayKey), history: nextHistory, lastDayKey: todayKey, userPrefs, muteUntil })
             );
           } catch {}
 
           await get().replan();
         } else {
-          set({ tasks, brief, motivationalQuote, history, lastDayKey: todayKey, isLoading: false, lastAction: undefined, userPrefs });
+          set({ tasks, brief, motivationalQuote, history, lastDayKey: todayKey, isLoading: false, lastAction: undefined, userPrefs, muteUntil });
           try {
             await AsyncStorage.setItem(
               STORAGE_KEY,
-              JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: todayKey, userPrefs })
+              JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: todayKey, userPrefs, muteUntil })
             );
           } catch {}
         }
       } else {
         const motivationalQuote = pickQuoteForDay(todayKey);
-        set({ motivationalQuote, history: {}, lastDayKey: todayKey, isLoading: false, userPrefs: DEFAULT_USER_PREFS });
+        set({ motivationalQuote, history: {}, lastDayKey: todayKey, isLoading: false, userPrefs: DEFAULT_USER_PREFS, muteUntil: undefined });
         try {
           const { tasks, brief } = get();
           await AsyncStorage.setItem(
             STORAGE_KEY,
-            JSON.stringify({ tasks, brief, motivationalQuote, history: {}, lastDayKey: todayKey, userPrefs: DEFAULT_USER_PREFS })
+            JSON.stringify({ tasks, brief, motivationalQuote, history: {}, lastDayKey: todayKey, userPrefs: DEFAULT_USER_PREFS, muteUntil: undefined })
           );
         } catch {}
       }
@@ -230,10 +236,10 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     }));
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote, history, userPrefs } = get();
+      const { tasks, brief, motivationalQuote, history, userPrefs, muteUntil } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs, muteUntil })
       );
     } catch {}
   },
@@ -262,10 +268,10 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     });
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote, history, userPrefs } = get();
+      const { tasks, brief, motivationalQuote, history, userPrefs, muteUntil } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs, muteUntil })
       );
     } catch {}
   },
@@ -293,10 +299,10 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     });
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote, history, userPrefs } = get();
+      const { tasks, brief, motivationalQuote, history, userPrefs, muteUntil } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs, muteUntil })
       );
     } catch {}
   },
@@ -307,21 +313,21 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     }));
     get().recalcBrief();
     try {
-      const { tasks, brief, motivationalQuote, history, userPrefs } = get();
+      const { tasks, brief, motivationalQuote, history, userPrefs, muteUntil } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs, muteUntil })
       );
     } catch {}
   },
 
-  replan: async () => {
+  replan: async (opts) => {
     const allTasks = tasksWithDefaults(get().tasks);
     const todo = allTasks.filter(t => t.status === 'todo');
     const others = allTasks.filter(t => t.status !== 'todo');
 
     const { userPrefs } = get();
-    const plan = replanHeuristic({ tasks: todo, userPrefs });
+    const plan = replanHeuristic({ tasks: todo, userPrefs, timeBudget: opts?.timeBudget, focusTag: opts?.focusTag });
 
     const idToTask = new Map(allTasks.map(t => [t.id, t] as const));
     const plannedTodo = plan.order.map(id => idToTask.get(id)).filter((t): t is Task => !!t);
@@ -331,10 +337,23 @@ export const useTasksStore = create<TasksStore>((set, get) => ({
     set({ tasks: newTasks, lastAction: undefined, motivationalQuote: nextQuote });
     get().recalcBrief();
     try {
+      const { tasks, brief, motivationalQuote, history, userPrefs, muteUntil } = get();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs, muteUntil })
+      );
+    } catch {}
+  },
+
+  setMuteFor: async (minutes: number) => {
+    const ms = Math.max(1, Math.floor(minutes)) * 60 * 1000;
+    const until = Date.now() + ms;
+    set({ muteUntil: until });
+    try {
       const { tasks, brief, motivationalQuote, history, userPrefs } = get();
       await AsyncStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs })
+        JSON.stringify({ tasks, brief, motivationalQuote, history, lastDayKey: getTodayKey(), userPrefs, muteUntil: until })
       );
     } catch {}
   },
